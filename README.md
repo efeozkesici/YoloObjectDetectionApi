@@ -3,25 +3,6 @@
 ## Overview
 This project implements a RESTful API for performing object detection on images using a pre-trained YOLO model. The API is containerized using Docker.
 
-## Directory Structure
-
-yolo-api-docker/
-│
-├── Dockerfile
-├── README.md
-├── app/
-│ ├── main.py
-│ ├── yolo.py
-│ ├── utils.py
-│ └── init.py
-├── models/
-│ └── yolov5s.pt # Pre-trained YOLO model
-├── requirements.txt
-└── sample/
-├── input.jpg
-├── output.jpg
-└── test_api.py
-
 
 ## Setup
 
