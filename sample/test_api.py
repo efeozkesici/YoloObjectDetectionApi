@@ -1,12 +1,15 @@
 import requests
 
-url = "http://localhost:8000/detect/"
+# API'nin çalıştığı sunucu ve port
+URL = "http://localhost:8000/detect"
 
-files = {'file': open('input.jpeg', 'rb')}
+# Test edilecek dosya ve sınıflar
+image_path = "test_image.jpg"
+target_classes = ["person", "car"]
 
-target_classes = 'person,car'
-data = {'target_classes': target_classes}
+files = {"file": open(image_path, "rb")}
+data = {"target_classes": target_classes}
 
-response = requests.post(url, files=files, data=data)
+response = requests.post(URL, files=files, json=data)
 
 print(response.json())

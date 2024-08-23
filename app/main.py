@@ -1,33 +1,53 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
-from app.yolo import load_model, prepare_image, run_inference
-from app.utils import save_image, create_temp_file, remove_temp_file
+import torch
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from pydantic import BaseModel
+from typing import List
+from utils import create_temp_file, remove_temp_file, save_image
 
 app = FastAPI()
 
-model = load_model()
+try:
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+except Exception as e:
+    raise HTTPException(status_code=500, detail=f"Failed to load YOLO model: {str(e)}")
 
-@app.post("/detect/")
-async def detect_objects_in_image(file: UploadFile = File(...), target_classes: str = ""):
-    
-    target_classes_list = [cls.strip() for cls in target_classes.split(',') if cls.strip()]
+class DetectionRequest(BaseModel):
+    target_classes: List[str]
 
-    if not file.filename.endswith(('.jpg', '.jpeg', '.png')):
-        raise HTTPException(status_code=400, detail="Invalid file type. Only jpg, jpeg, and png are allowed.")
-    
+@app.post("/detect")
+async def detect_objects(file: UploadFile = File(...), request: DetectionRequest = None):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid image file format")
+
     temp_image_path = create_temp_file(file)
-    image_tensor = prepare_image(temp_image_path)
-
+    
     try:
-        results = await run_inference(model, image_tensor, target_classes_list)
+        try:
+            image = model(temp_image_path)
+            results = image.pandas().xyxy[0].to_dict(orient="records")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to perform object detection: {str(e)}")
 
-        output_path = f"output/{file.filename}"
-        save_image(temp_image_path, results, output_path)
+        try:
+            filtered_results = [
+                {
+                    'bbox': [result['xmin'], result['ymin'], result['xmax'], result['ymax']],
+                    'label': result['name'],
+                    'confidence': result['confidence']
+                }
+                for result in results if result['name'] in request.target_classes
+            ]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to filter results: {str(e)}")
 
-        return JSONResponse(content={"message": "Detection complete", "output_image": output_path}, status_code=200)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+        output_image_path = f"output/{file.filename}"
+        save_image(temp_image_path, filtered_results, output_image_path)
+        
     finally:
         remove_temp_file(temp_image_path)
+
+    return {"output_image_path": output_image_path}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
